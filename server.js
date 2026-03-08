@@ -191,6 +191,18 @@ wss.on("connection", (ws) => {
 
         }
 
+        /* broadcast sensor data to dashboard clients */
+
+        wss.clients.forEach(client => {
+
+        if (client.readyState === WebSocket.OPEN) {
+
+            client.send(JSON.stringify(msg));
+
+        }
+
+        });
+
     } catch (error) {
 
         console.log("Invalid message format");
