@@ -189,6 +189,21 @@ wss.on("connection", (ws) => {
 
         console.log("ALERT:", a);
 
+        /* broadcast alert to dashboards */
+
+        wss.clients.forEach(client => {
+
+            if (client.readyState === WebSocket.OPEN) {
+
+            client.send(JSON.stringify({
+                type: "alert",
+                data: a
+            }));
+
+            }
+
+        });
+
         }
 
         /* broadcast sensor data to dashboard clients */
