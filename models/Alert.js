@@ -12,9 +12,29 @@ const alertSchema = new mongoose.Schema({
     required: true
   },
 
+  type: {
+    type: String,
+    default: "sensor"
+  },
+
   severity: {
     type: String,
     default: "warning"
+  },
+
+  status: {
+    type: String,
+    enum: ["active", "resolved"],
+    default: "active"
+  },
+
+  acknowledged: {
+    type: Boolean,
+    default: false
+  },
+
+  acknowledgedAt: {
+    type: Date
   },
 
   timestamp: {

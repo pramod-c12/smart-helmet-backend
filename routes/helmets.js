@@ -65,4 +65,29 @@ router.get("/:companyId", async (req, res) => {
 
 });
 
+
+/* DELETE HELMET */
+
+router.delete("/:helmetId", async (req, res) => {
+
+  try {
+
+    const helmet = await Helmet.findOneAndDelete({
+      helmetId: req.params.helmetId
+    });
+
+    if (!helmet) {
+      return res.status(404).json({ message: "Helmet not found" });
+    }
+
+    res.json({ message: "Helmet deleted successfully" });
+
+  } catch (error) {
+
+    res.status(500).json({ error: error.message });
+
+  }
+
+});
+
 module.exports = router;
