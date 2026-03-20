@@ -75,11 +75,10 @@ router.get("/alerts/company/:companyId", async (req, res) => {
 
     const helmetIds = helmets.map(h => h.helmetId);
 
-    // Then get alerts for all those helmets
+    // Then get all alerts for those helmets (no limit for full history)
     const alerts = await Alert
       .find({ helmetId: { $in: helmetIds } })
-      .sort({ timestamp: -1 })
-      .limit(100);
+      .sort({ timestamp: -1 });
 
     res.json(alerts);
 
@@ -131,8 +130,7 @@ router.get("/alerts/:helmetId", async (req, res) => {
 
     const alerts = await Alert
       .find({ helmetId: req.params.helmetId })
-      .sort({ timestamp: -1 })
-      .limit(50);
+      .sort({ timestamp: -1 });
 
     res.json(alerts);
 
