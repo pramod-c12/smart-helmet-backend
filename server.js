@@ -89,33 +89,19 @@ wss.on("connection", (ws) => {
 
         console.log("Sensor Data:", msg);
 
-        /* store sensor data */
+        /* BROADCAST TELEMETRY DATA IMMEDIATELY for instant display */
 
-        const sensorRecord = new SensorData({
+        wss.clients.forEach(client => {
 
-            helmetId: msg.helmetId,
+        if (client.readyState === WebSocket.OPEN) {
 
-            bpm: msg.bpm,
-            spo2: msg.spo2,
+            client.send(JSON.stringify(msg));
 
-            acc: msg.acc,
-
-            angleX: msg.angleX,
-            angleY: msg.angleY,
-
-            accident: msg.accident,
-            health: msg.health,
-
-            risk: msg.risk,
-
-            lat: msg.lat,
-            lon: msg.lon
+        }
 
         });
 
-        await sensorRecord.save();
-
-        /* ALERT DETECTION */
+        /* ALERT DETECTION - check and broadcast alerts immediately */
 
         const alerts = [];
 
@@ -179,17 +165,11 @@ wss.on("connection", (ws) => {
 
         }
 
-        /* store alerts */
+        /* broadcast alerts immediately */
 
         for (const a of alerts) {
 
-        const alert = new Alert(a);
-
-        await alert.save();
-
         console.log("ALERT:", a);
-
-        /* broadcast alert to dashboards */
 
         wss.clients.forEach(client => {
 
@@ -206,13 +186,51 @@ wss.on("connection", (ws) => {
 
         }
 
-        /* broadcast sensor data to dashboard clients */
+        /* SAVE TO DATABASE ASYNCHRONOUSLY (non-blocking) */
 
-        wss.clients.forEach(client => {
+        setImmediate(async () => {
 
-        if (client.readyState === WebSocket.OPEN) {
+        try {
 
-            client.send(JSON.stringify(msg));
+            /* store sensor data */
+
+            const sensorRecord = new SensorData({
+
+            helmetId: msg.helmetId,
+
+            bpm: msg.bpm,
+            spo2: msg.spo2,
+
+            acc: msg.acc,
+
+            angleX: msg.angleX,
+            angleY: msg.angleY,
+
+            accident: msg.accident,
+            health: msg.health,
+
+            risk: msg.risk,
+
+            lat: msg.lat,
+            lon: msg.lon
+
+            });
+
+            await sensorRecord.save();
+
+            /* store alerts */
+
+            for (const a of alerts) {
+
+            const alert = new Alert(a);
+
+            await alert.save();
+
+            }
+
+        } catch (dbError) {
+
+            console.error("Database save error:", dbError);
 
         }
 
