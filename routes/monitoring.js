@@ -91,6 +91,51 @@ router.get("/alerts/company/:companyId", async (req, res) => {
 });
 
 
+/* GET TODAY'S ALERTS WITH STATS FOR COMPANY */
+
+router.get("/alerts/company/:companyId/today", async (req, res) => {
+
+  try {
+
+    // First get all helmets for this company
+    const helmets = await Helmet.find({
+      companyId: req.params.companyId
+    });
+
+    const helmetIds = helmets.map(h => h.helmetId);
+
+    // Get start of today (UTC)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Get today's alerts for those helmets
+    const alerts = await Alert
+      .find({
+        helmetId: { $in: helmetIds },
+        timestamp: { $gte: today }
+      })
+      .sort({ timestamp: -1 });
+
+    // Calculate stats
+    const stats = {
+      total: alerts.length,
+      active: alerts.filter(a => a.status === "active").length,
+      critical: alerts.filter(a => a.severity === "critical" && a.status === "active").length,
+      warning: alerts.filter(a => a.severity === "warning" && a.status === "active").length,
+      resolved: alerts.filter(a => a.status === "resolved").length
+    };
+
+    res.json({ alerts, stats });
+
+  } catch (error) {
+
+    res.status(500).json({ error: error.message });
+
+  }
+
+});
+
+
 /* ACKNOWLEDGE ALERT */
 
 router.post("/alerts/:alertId/acknowledge", async (req, res) => {
