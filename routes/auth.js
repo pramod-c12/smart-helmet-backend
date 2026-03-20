@@ -31,8 +31,19 @@ router.post("/register", async (req, res) => {
 
     await company.save();
 
+    const token = jwt.sign(
+      { companyId: company._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
     res.json({
-      message: "Company registered successfully"
+      message: "Company registered successfully",
+      token,
+      companyId: company._id,
+      companyName: company.companyName,
+      adminName: company.adminName,
+      email: company.email
     });
 
   } catch (error) {
@@ -72,8 +83,35 @@ router.post("/login", async (req, res) => {
 
     res.json({
       message: "Login successful",
-      token
+      token,
+      companyId: company._id,
+      companyName: company.companyName,
+      adminName: company.adminName,
+      email: company.email
     });
+
+  } catch (error) {
+
+    res.status(500).json({ error: error.message });
+
+  }
+
+});
+
+
+/* GET COMPANY PROFILE */
+
+router.get("/profile/:companyId", async (req, res) => {
+
+  try {
+
+    const company = await Company.findById(req.params.companyId).select("-password");
+
+    if (!company) {
+      return res.status(404).json({ message: "Company not found" });
+    }
+
+    res.json(company);
 
   } catch (error) {
 
