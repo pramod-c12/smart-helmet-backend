@@ -1,18 +1,44 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const rateLimit = require("express-rate-limit");
 
 const Company = require("../models/Company");
 
 const router = express.Router();
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, 
+  message: { message: "Too many login attempts, please try again later" }
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, 
+  message: { message: "Too many accounts created from this IP, please try again after an hour" }
+});
+
 /* COMPANY REGISTER */
 
-router.post("/register", async (req, res) => {
+router.post("/register", registerLimiter, async (req, res) => {
 
   try {
 
     const { companyName, adminName, email, password } = req.body;
+
+    if (!companyName || !adminName || !email || !password) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: "Invalid email format" });
+    }
 
     const existing = await Company.findOne({ email });
 
@@ -57,11 +83,15 @@ router.post("/register", async (req, res) => {
 
 /* COMPANY LOGIN */
 
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
 
   try {
 
     const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
 
     const company = await Company.findOne({ email });
 

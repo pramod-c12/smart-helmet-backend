@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const WebSocket = require("ws");
+const jwt = require("jsonwebtoken");
 
 const authRoutes = require("./routes/auth");
 const helmetRoutes = require("./routes/helmets");
@@ -16,11 +17,13 @@ const connectDB = require("./config/db");
 
 const app = express();
 
+const authMiddleware = require("./config/authMiddleware");
+
 app.use(cors());
 app.use(express.json());
 app.use("/api/auth", authRoutes);
-app.use("/api/helmets", helmetRoutes);
-app.use("/api", monitoringRoutes);
+app.use("/api/helmets", authMiddleware, helmetRoutes);
+app.use("/api", authMiddleware, monitoringRoutes);
 
 
 /* connect database */
@@ -46,9 +49,28 @@ app.get("/", (req, res) => {
 
 const wss = new WebSocket.Server({ server });
 
-wss.on("connection", (ws) => {
+wss.on("connection", (ws, req) => {
 
-  console.log("Helmet connected");
+  console.log("Client connected");
+
+  // Authenticate dashboard clients using token
+  let authCompanyId = null;
+  const urlParts = req.url.split('?');
+  if (urlParts.length > 1) {
+    const urlParams = new URLSearchParams(urlParts[1]);
+    const token = urlParams.get('token');
+    
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        authCompanyId = decoded.companyId;
+        ws.companyId = authCompanyId;
+        console.log("Dashboard client authenticated for company:", ws.companyId);
+      } catch (error) {
+        console.log("Invalid WebSocket token");
+      }
+    }
+  }
 
   ws.on("message", async (data) => {
 
@@ -93,7 +115,8 @@ wss.on("connection", (ws) => {
 
         wss.clients.forEach(client => {
 
-        if (client.readyState === WebSocket.OPEN) {
+        // Only send to dashboard clients of the same company
+        if (client.readyState === WebSocket.OPEN && client.companyId === helmet.companyId.toString()) {
 
             client.send(JSON.stringify(msg));
 
@@ -173,7 +196,8 @@ wss.on("connection", (ws) => {
 
         wss.clients.forEach(client => {
 
-            if (client.readyState === WebSocket.OPEN) {
+            // Only send to dashboard clients of the same company
+            if (client.readyState === WebSocket.OPEN && client.companyId === helmet.companyId.toString()) {
 
             client.send(JSON.stringify({
                 type: "alert",
