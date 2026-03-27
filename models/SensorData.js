@@ -35,4 +35,7 @@ const sensorDataSchema = new mongoose.Schema({
 
 });
 
+// Indexes for performance
+sensorDataSchema.index({ helmetId: 1, timestamp: -1 });
+
 module.exports = mongoose.model("SensorData", sensorDataSchema);

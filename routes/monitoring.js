@@ -6,23 +6,7 @@ const Helmet = require("../models/Helmet");
 
 const router = express.Router();
 
-router.get("/helmets/:companyId", async (req, res) => {
 
-  try {
-
-    const helmets = await Helmet.find({
-      companyId: req.params.companyId
-    });
-
-    res.json(helmets);
-
-  } catch (error) {
-
-    res.status(500).json({ error: error.message });
-
-  }
-
-});
 
 router.get("/data/:helmetId", async (req, res) => {
 
