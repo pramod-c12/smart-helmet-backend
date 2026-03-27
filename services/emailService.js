@@ -11,13 +11,13 @@ const transporter = nodemailer.createTransport({
 
 });
 
-async function sendAlertEmail(alert){
+async function sendAlertEmail(alert, toEmail){
 
   const mailOptions = {
 
     from: process.env.EMAIL_USER,
 
-    to: process.env.ALERT_EMAIL,
+    to: toEmail || process.env.ALERT_EMAIL,
 
     subject: "🚨 Smart Helmet Emergency Alert",
 

@@ -29,7 +29,8 @@ const sensorDataSchema = new mongoose.Schema({
 
   timestamp: {
     type: Date,
-    default: Date.now
+    default: Date.now,
+    expires: '30d' // Automatically delete documents 30 days after this timestamp
   }
 
 });

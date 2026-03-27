@@ -23,6 +23,24 @@ const companySchema = new mongoose.Schema({
     required: true
   },
 
+  industry: {
+    type: String,
+    default: "construction"
+  },
+
+  location: {
+    type: String,
+    default: ""
+  },
+
+  alertSettings: {
+    bpmThreshold: { type: Number, default: 120 },
+    spo2Threshold: { type: Number, default: 95 },
+    emailAlerts: { type: Boolean, default: true },
+    smsAlerts: { type: Boolean, default: false },
+    pushNotifications: { type: Boolean, default: true }
+  },
+
   createdAt: {
     type: Date,
     default: Date.now

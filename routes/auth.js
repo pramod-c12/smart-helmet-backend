@@ -2,6 +2,7 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const rateLimit = require("express-rate-limit");
+const authMiddleware = require("../config/authMiddleware");
 
 const Company = require("../models/Company");
 
@@ -142,6 +143,45 @@ router.get("/profile/:companyId", async (req, res) => {
     }
 
     res.json(company);
+
+  } catch (error) {
+
+    res.status(500).json({ error: error.message });
+
+  }
+
+});
+
+
+/* UPDATE COMPANY SETTINGS */
+
+router.put("/company/settings", authMiddleware, async (req, res) => {
+
+  try {
+
+    const { companyName, adminName, industry, location, alertSettings } = req.body;
+    const companyId = req.user.companyId;
+
+    // Build the update object dynamically
+    const updateData = {
+      ...(companyName && { companyName }),
+      ...(adminName && { adminName }),
+      ...(industry && { industry }),
+      ...(location && { location }),
+      ...(alertSettings && { alertSettings })
+    };
+
+    const company = await Company.findByIdAndUpdate(
+      companyId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    if (!company) {
+      return res.status(404).json({ message: "Company not found" });
+    }
+
+    res.json({ message: "Settings updated successfully", company });
 
   } catch (error) {
 

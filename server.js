@@ -12,6 +12,8 @@ const monitoringRoutes = require("./routes/monitoring");
 const Helmet = require("./models/Helmet");
 const SensorData = require("./models/SensorData");
 const Alert = require("./models/Alert");
+const Company = require("./models/Company");
+const sendAlertEmail = require("./services/emailService");
 
 const connectDB = require("./config/db");
 
@@ -111,6 +113,25 @@ wss.on("connection", (ws, req) => {
 
         console.log("Sensor Data:", msg);
 
+        /* get company settings for dynamic alerts */
+        let companyEmail = null;
+        let alertSettings = {
+          bpmThreshold: 120,
+          spo2Threshold: 90,
+          emailAlerts: false
+        };
+        try {
+          const comp = await Company.findById(helmet.companyId);
+          if (comp) {
+            companyEmail = comp.email;
+            if (comp.alertSettings) {
+              alertSettings = { ...alertSettings, ...comp.alertSettings.toObject() };
+            }
+          }
+        } catch(err) {
+          console.error("Error fetching company settings:", err);
+        }
+
         /* BROADCAST TELEMETRY DATA IMMEDIATELY for instant display */
 
         wss.clients.forEach(client => {
@@ -166,11 +187,11 @@ wss.on("connection", (ws, req) => {
 
         /* oxygen danger */
 
-        if (msg.spo2 < 90) {
+        if (msg.spo2 <= alertSettings.spo2Threshold) {
 
         alerts.push({
             helmetId: msg.helmetId,
-            message: "Low oxygen level",
+            message: `Low oxygen level (${msg.spo2}%)`,
             severity: "critical"
         });
 
@@ -178,21 +199,30 @@ wss.on("connection", (ws, req) => {
 
         /* abnormal heart rate */
 
-        if (msg.bpm > 120) {
+        if (msg.bpm >= alertSettings.bpmThreshold) {
 
         alerts.push({
             helmetId: msg.helmetId,
-            message: "High heart rate detected",
-            severity: "warning"
+            message: `High heart rate detected (${msg.bpm} BPM)`,
+            severity: "warning" // Note: can be configured or escalated
         });
 
         }
 
-        /* broadcast alerts immediately */
+        /* broadcast alerts immediately and send emails if configured */
 
         for (const a of alerts) {
 
         console.log("ALERT:", a);
+
+        // Send email for critical alerts if enabled
+        if (a.severity === "critical" && alertSettings.emailAlerts && companyEmail) {
+          try {
+            sendAlertEmail(a, companyEmail);
+          } catch(err) {
+            console.error("Failed to send alert email:", err);
+          }
+        }
 
         wss.clients.forEach(client => {
 

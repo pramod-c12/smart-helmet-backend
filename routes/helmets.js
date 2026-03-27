@@ -90,4 +90,33 @@ router.delete("/:helmetId", async (req, res) => {
 
 });
 
+/* UPDATE HELMET */
+
+router.put("/:helmetId", async (req, res) => {
+  try {
+    const { workerName, location } = req.body;
+    
+    // Only update fields that exist in the request
+    const updateData = {
+      ...(workerName && { workerName }),
+      ...(location && { location })
+    };
+
+    const helmet = await Helmet.findOneAndUpdate(
+      { helmetId: req.params.helmetId },
+      { $set: updateData },
+      { new: true }
+    );
+
+    if (!helmet) {
+      return res.status(404).json({ message: "Helmet not found" });
+    }
+
+    res.json({ message: "Helmet updated successfully", helmet });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
