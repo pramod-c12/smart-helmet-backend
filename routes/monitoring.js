@@ -26,14 +26,25 @@ router.get("/data/:helmetId", async (req, res) => {
 
 });
 
+// History route with optional date filter
 router.get("/history/:helmetId", async (req, res) => {
 
   try {
 
+    let query = { helmetId: req.params.helmetId };
+
+    if (req.query.date) {
+      const startDate = new Date(req.query.date);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 1);
+      query.timestamp = { $gte: startDate, $lt: endDate };
+    }
+
     const history = await SensorData
-      .find({ helmetId: req.params.helmetId })
+      .find(query)
       .sort({ timestamp: -1 })
-      .limit(100);
+      .limit(req.query.date ? 10000 : 100);
 
     res.json(history);
 
@@ -43,6 +54,52 @@ router.get("/history/:helmetId", async (req, res) => {
 
   }
 
+});
+
+/* GET ANALYTICS FOR COMPANY */
+router.get("/analytics/:companyId", async (req, res) => {
+  try {
+    const helmets = await Helmet.find({ companyId: req.params.companyId });
+    const helmetIds = helmets.map(h => h.helmetId);
+
+    const range = req.query.days ? parseInt(req.query.days) : 7;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - range);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Aggregate average BPM and SpO2 per day
+    const vitalTrends = await SensorData.aggregate([
+      { $match: { helmetId: { $in: helmetIds }, timestamp: { $gte: startDate } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
+          avgBpm: { $avg: "$bpm" },
+          avgSpo2: { $avg: "$spo2" }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // Aggregate Alerts per day
+    const alertTrends = await Alert.aggregate([
+      { $match: { helmetId: { $in: helmetIds }, timestamp: { $gte: startDate } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
+          count: { $sum: 1 },
+          critical: {
+            $sum: { $cond: [{ $eq: ["$severity", "critical"] }, 1, 0] }
+          }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    res.json({ vitalTrends, alertTrends });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 
