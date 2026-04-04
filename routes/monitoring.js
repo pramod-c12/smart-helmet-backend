@@ -60,7 +60,12 @@ router.get("/history/:helmetId", async (req, res) => {
 router.get("/analytics/:companyId", async (req, res) => {
   try {
     const helmets = await Helmet.find({ companyId: req.params.companyId });
-    const helmetIds = helmets.map(h => h.helmetId);
+    let helmetIds = helmets.map(h => h.helmetId);
+
+    // Optional: filter to a single worker for drill-down (#7)
+    if (req.query.helmetId) {
+      helmetIds = helmetIds.filter(id => id === req.query.helmetId);
+    }
 
     const range = req.query.days ? parseInt(req.query.days) : 7;
     const startDate = new Date();
@@ -96,6 +101,75 @@ router.get("/analytics/:companyId", async (req, res) => {
     ]);
 
     res.json({ vitalTrends, alertTrends });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/* GET PER-WORKER RANKING STATS FOR COMPANY (#10) */
+router.get("/analytics/:companyId/workers", async (req, res) => {
+  try {
+    const helmets = await Helmet.find({ companyId: req.params.companyId });
+    const helmetIds = helmets.map(h => h.helmetId);
+
+    const range = req.query.days ? parseInt(req.query.days) : 7;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - range);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Per-worker vital averages
+    const workerVitals = await SensorData.aggregate([
+      { $match: { helmetId: { $in: helmetIds }, timestamp: { $gte: startDate } } },
+      {
+        $group: {
+          _id: "$helmetId",
+          avgBpm: { $avg: "$bpm" },
+          avgSpo2: { $avg: "$spo2" },
+          avgRisk: { $avg: "$risk" },
+          maxRisk: { $max: "$risk" },
+          dataPoints: { $sum: 1 }
+        }
+      },
+      { $sort: { avgRisk: -1 } }
+    ]);
+
+    // Per-worker alert counts
+    const workerAlerts = await Alert.aggregate([
+      { $match: { helmetId: { $in: helmetIds }, timestamp: { $gte: startDate } } },
+      {
+        $group: {
+          _id: "$helmetId",
+          totalAlerts: { $sum: 1 },
+          criticalAlerts: {
+            $sum: { $cond: [{ $eq: ["$severity", "critical"] }, 1, 0] }
+          }
+        }
+      }
+    ]);
+
+    // Merge vitals + alerts + helmet metadata
+    const workers = helmets.map(helmet => {
+      const vitals = workerVitals.find(v => v._id === helmet.helmetId) || {};
+      const alerts = workerAlerts.find(a => a._id === helmet.helmetId) || {};
+      return {
+        helmetId: helmet.helmetId,
+        workerName: helmet.workerName,
+        location: helmet.location,
+        avgBpm: vitals.avgBpm ? Math.round(vitals.avgBpm * 10) / 10 : null,
+        avgSpo2: vitals.avgSpo2 ? Math.round(vitals.avgSpo2 * 10) / 10 : null,
+        avgRisk: vitals.avgRisk ? Math.round(vitals.avgRisk * 10) / 10 : null,
+        maxRisk: vitals.maxRisk ? Math.round(vitals.maxRisk * 10) / 10 : null,
+        dataPoints: vitals.dataPoints || 0,
+        totalAlerts: alerts.totalAlerts || 0,
+        criticalAlerts: alerts.criticalAlerts || 0,
+      };
+    });
+
+    // Sort by avgRisk descending (most at-risk first)
+    workers.sort((a, b) => (b.avgRisk || 0) - (a.avgRisk || 0));
+
+    res.json(workers);
 
   } catch (error) {
     res.status(500).json({ error: error.message });
