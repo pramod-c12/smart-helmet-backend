@@ -26,6 +26,30 @@ router.get("/data/:helmetId", async (req, res) => {
 
 });
 
+/* GET CURRENT TELEMETRY FOR ALL HELMETS IN A COMPANY */
+router.get("/data/company/:companyId", async (req, res) => {
+  try {
+    const helmets = await Helmet.find({ companyId: req.params.companyId });
+    const helmetIds = helmets.map(h => h.helmetId);
+
+    const latestData = await SensorData.aggregate([
+      { $match: { helmetId: { $in: helmetIds } } },
+      { $sort: { timestamp: -1 } },
+      {
+        $group: {
+          _id: "$helmetId",
+          doc: { $first: "$$ROOT" }
+        }
+      },
+      { $replaceRoot: { newRoot: "$doc" } }
+    ]);
+
+    res.json(latestData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // History route with optional date filter
 router.get("/history/:helmetId", async (req, res) => {
 
