@@ -9,6 +9,9 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
   connectionTimeout: 10000,
+  tls: {
+    rejectUnauthorized: false,
+  },
 });
 
 async function sendAlertEmail(alert, toEmail) {
