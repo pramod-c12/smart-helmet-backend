@@ -217,11 +217,18 @@ wss.on("connection", (ws, req) => {
 
         // Send email for critical alerts if enabled
         if (a.severity === "critical" && alertSettings.emailAlerts && companyEmail) {
+          console.log("📧 Sending email alert to:", companyEmail);
           try {
             sendAlertEmail(a, companyEmail);
           } catch(err) {
             console.error("Failed to send alert email:", err);
           }
+        } else {
+          console.log("📧 Email skipped —",
+            a.severity !== "critical" ? `severity is "${a.severity}" (need "critical")` :
+            !alertSettings.emailAlerts ? "emailAlerts is disabled in company settings" :
+            "no company email configured"
+          );
         }
 
         wss.clients.forEach(client => {
