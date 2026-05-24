@@ -201,7 +201,7 @@ router.get("/analytics/:companyId/workers", async (req, res) => {
 });
 
 
-/* GET ALERTS BY COMPANY - must be before /alerts/:helmetId */
+/* GET ALERTS BY COMPANY (PAGINATED) - must be before /alerts/:helmetId */
 
 router.get("/alerts/company/:companyId", async (req, res) => {
 
@@ -214,12 +214,121 @@ router.get("/alerts/company/:companyId", async (req, res) => {
 
     const helmetIds = helmets.map(h => h.helmetId);
 
-    // Then get all alerts for those helmets (no limit for full history)
-    const alerts = await Alert
-      .find({ helmetId: { $in: helmetIds } })
-      .sort({ timestamp: -1 });
+    // Build filter query
+    const filter = { helmetId: { $in: helmetIds } };
 
-    res.json(alerts);
+    // Optional filters from query params
+    if (req.query.severity && req.query.severity !== "all") {
+      filter.severity = req.query.severity;
+    }
+    if (req.query.status && req.query.status !== "all") {
+      filter.status = req.query.status;
+    }
+    if (req.query.helmetId && req.query.helmetId !== "all") {
+      filter.helmetId = req.query.helmetId;
+    }
+    if (req.query.search) {
+      const searchRegex = new RegExp(req.query.search, "i");
+      filter.$or = [
+        { helmetId: searchRegex },
+        { message: searchRegex }
+      ];
+    }
+
+    // Pagination params
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip = (page - 1) * limit;
+
+    // Use $facet to get paginated results + stats in a single aggregation
+    const baseFilter = { helmetId: { $in: helmetIds } };
+
+    const [result] = await Alert.aggregate([
+      { $match: filter },
+      {
+        $facet: {
+          alerts: [
+            { $sort: { timestamp: -1 } },
+            { $skip: skip },
+            { $limit: limit }
+          ],
+          filtered: [
+            { $count: "count" }
+          ]
+        }
+      }
+    ]);
+
+    // Compute global stats (unfiltered) for the stat cards
+    const statsAgg = await Alert.aggregate([
+      { $match: baseFilter },
+      {
+        $facet: {
+          total: [{ $count: "count" }],
+          active: [
+            { $match: { status: "active" } },
+            { $count: "count" }
+          ],
+          critical: [
+            { $match: { severity: "critical", status: "active" } },
+            { $count: "count" }
+          ],
+          resolved: [
+            { $match: { status: "resolved" } },
+            { $count: "count" }
+          ]
+        }
+      }
+    ]);
+
+    const s = statsAgg[0] || {};
+    const stats = {
+      total: s.total?.[0]?.count || 0,
+      active: s.active?.[0]?.count || 0,
+      critical: s.critical?.[0]?.count || 0,
+      resolved: s.resolved?.[0]?.count || 0
+    };
+
+    const filteredTotal = result.filtered?.[0]?.count || 0;
+
+    res.json({
+      alerts: result.alerts,
+      pagination: {
+        page,
+        limit,
+        total: filteredTotal,
+        totalPages: Math.ceil(filteredTotal / limit)
+      },
+      stats
+    });
+
+  } catch (error) {
+
+    res.status(500).json({ error: error.message });
+
+  }
+
+});
+
+
+/* BULK RESOLVE ALERTS FOR COMPANY */
+
+router.post("/alerts/company/:companyId/bulk-resolve", async (req, res) => {
+
+  try {
+
+    const helmets = await Helmet.find({
+      companyId: req.params.companyId
+    });
+
+    const helmetIds = helmets.map(h => h.helmetId);
+
+    const result = await Alert.updateMany(
+      { helmetId: { $in: helmetIds }, status: "active" },
+      { $set: { status: "resolved", acknowledged: true, acknowledgedAt: new Date() } }
+    );
+
+    res.json({ message: "Alerts resolved", modifiedCount: result.modifiedCount });
 
   } catch (error) {
 

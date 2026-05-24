@@ -47,5 +47,7 @@ const alertSchema = new mongoose.Schema({
 // Indexes for performance
 alertSchema.index({ helmetId: 1, timestamp: -1 });
 alertSchema.index({ timestamp: -1 });
+alertSchema.index({ helmetId: 1, status: 1, timestamp: -1 });
+alertSchema.index({ helmetId: 1, severity: 1, status: 1 });
 
 module.exports = mongoose.model("Alert", alertSchema);
